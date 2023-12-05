@@ -2,7 +2,7 @@ import json
 import urllib.parse as urlparse
 from datetime import date, datetime
 
-from scrapy import Request
+import scrapy
 
 from gazette.items import Gazette
 from gazette.spiders.base import BaseGazetteSpider
@@ -14,10 +14,9 @@ class SpRibeiraoPretoSpider(BaseGazetteSpider):
     allowed_domains = ["cespro.com.br"]
     start_date = date(1973, 1, 23)
     start_date_str = start_date.strftime("%d/%m/%Y")
-    # end_date = datetime.today().date()
     ID = "9314"
 
-    def make_request(self, page):
+    def create_url(self, page):
         end_date_str = self.end_date.strftime("%d/%m/%Y")
         base_url = "https://cespro.com.br/_data/api.php?"
         header = {"Content-Type": "application/json"}
@@ -33,10 +32,17 @@ class SpRibeiraoPretoSpider(BaseGazetteSpider):
         query_str = urlparse.urlencode(params)
         url = base_url + query_str
 
-        yield Request(url, method="POST", body=json.dumps(payload), headers=header)
+        return (url, json.dumps(payload), header)
 
     def start_requests(self):
-        self.make_request(1)
+        request_data = self.create_url(1)
+
+        yield scrapy.Request(
+            request_data[0],
+            method="POST",
+            body=request_data[1],
+            headers=request_data[2],
+        )
 
     def parse(self, response):
         data = response.json()
@@ -69,4 +75,11 @@ class SpRibeiraoPretoSpider(BaseGazetteSpider):
         page_end = int(last_page[0])
         if page_end > 1:
             for page in range(2, page_end + 1):
-                self.make_request(page)
+                request_data = self.create_url(page)
+
+                yield response.follow(
+                    request_data[0],
+                    method="POST",
+                    body=request_data[1],
+                    headers=request_data[2],
+                )
